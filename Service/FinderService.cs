@@ -72,12 +72,21 @@ public sealed class FinderService : IDisposable
             var ptr = person.Ptr;
             unsafe
             {
-                var charPointer = (Character*)ptr;
-                if ((byte)charPointer->GameObject.ObjectKind != (byte)ObjectKind.Player)
+                try
+                {
+                    var charPointer = (Character*)ptr;
+                    if ((byte)charPointer->GameObject.ObjectKind != (byte)ObjectKind.Player)
+                    {
+                        ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
+                        continue;
+                    }
+                }
+                catch(Exception)
                 {
                     ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
                     continue;
                 }
+
             }
             if (ServiceManager.ObjectTable[i]?.Name.ToString() != person.Name)
             {
