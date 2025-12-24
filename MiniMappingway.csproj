@@ -4,6 +4,7 @@
     <Authors></Authors>
     <Company></Company>
     <Description>MiniMappingway</Description>
+	<AssemblyVersion>1.0.2.0</AssemblyVersion>
     <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/jaycewhite/MiniMappingway</PackageProjectUrl>
   </PropertyGroup>
