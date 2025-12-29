@@ -4,6 +4,7 @@ using MiniMappingway.Manager;
 using MiniMappingway.Utility;
 using System.Linq;
 using System.Numerics;
+using System;
 
 namespace MiniMappingway.Windows;
 
@@ -42,27 +43,16 @@ internal class NaviMapWindow : Window
             foreach (var dict in ServiceManager.NaviMapManager.PersonDict)
             {
                 count += dict.Value.Count;
-
             }
             ImGui.Text($"people {count}");
         }
 
-        //foreach (var keyValuePair in ServiceManager.NaviMapManager.CircleData.Where(x => x.Value.Any()))
-        foreach (var i in ServiceManager.NaviMapManager.CircleData.Where(x => x.Value.Any()).OrderBy(x => x.Key))
+        var circleData = ServiceManager.NaviMapManager.CircleData;
+        foreach (var data in circleData.Values)
         {
-            ServiceManager.NaviMapManager.CircleData.TryGetValue(i.Key, out var keyValuePair);
-            if (keyValuePair == null)
+            while (data.TryDequeue(out var circle))
             {
-                continue;
-            }
-            while (keyValuePair.Any())
-            {
-                keyValuePair.TryDequeue(out var circle);
-                if (circle == null)
-                {
-                    continue;
-                }
-
+                if (circle is null) continue;
                 var circleConfig = ServiceManager.NaviMapManager.SourceDataDict[circle.SourceName];
                 if (!circleConfig.Enabled)
                 {
@@ -74,9 +64,7 @@ internal class NaviMapWindow : Window
                     drawList.AddCircle(circle.Position, circleConfig.CircleSize, circleConfig.AutoBorderColour, 0, circleConfig.BorderRadius);
                 }
             }
-
         }
-
     }
 
     public override bool DrawConditions()

@@ -10,13 +10,13 @@ public class PersonDetails
 
     public string SourceName { get; }
 
-    public IntPtr Ptr { get; }
+    public int Index { get; }
 
-    public PersonDetails(string name, ulong id, string sourceName, IntPtr ptr)
+    public PersonDetails(string name, ulong id, string sourceName, int index)
     {
         Name = name;
         Id = id;
         SourceName = sourceName;
-        Ptr = ptr;
+        Index = index;
     }
 }

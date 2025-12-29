@@ -6,9 +6,7 @@ using System;
 namespace MiniMappingway.Model;
 
 [Serializable]
-#pragma warning disable CS0660, CS0661
 public class SourceData : IEquatable<SourceData>
-#pragma warning restore CS0660, CS0661
 {
     public bool Enabled { get; set; } = true;
 
@@ -55,40 +53,12 @@ public class SourceData : IEquatable<SourceData>
 
     public bool Equals(SourceData? other)
     {
-        if (ReferenceEquals(null, other))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-
+        if (ReferenceEquals(this, other)) return true;
+        if (other is null) return false;
         return Enabled == other.Enabled && Color == other.Color && BorderDarkeningAmount.Equals(other.BorderDarkeningAmount) && Priority == other.Priority && ShowBorder == other.ShowBorder && CircleSize == other.CircleSize && BorderRadius == other.BorderRadius;
     }
 
-#pragma warning disable CS0659
-    public override bool Equals(object? obj)
-#pragma warning restore CS0659
-    {
-        if (ReferenceEquals(null, obj))
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(this, obj))
-        {
-            return true;
-        }
-
-        if (obj.GetType() != GetType())
-        {
-            return false;
-        }
-
-        return Equals((SourceData)obj);
-    }
+    public override bool Equals(object? obj) => obj is SourceData other && this.Equals(other);
 
     public static bool operator ==(SourceData? left, SourceData? right)
     {

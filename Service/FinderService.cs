@@ -1,6 +1,7 @@
 ﻿using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
+using FFXIVClientStructs;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using MiniMappingway.Manager;
 using MiniMappingway.Model;
@@ -32,12 +33,10 @@ public sealed class FinderService : IDisposable
         _enumerator = _enumerable.GetEnumerator();
         _enumerator.MoveNext();
         _index = _enumerator.Current;
-
     }
 
     private void Iterate(IFramework framework)
     {
-
         CheckNewPeople(_index);
         CheckSamePerson(_index);
 
@@ -46,54 +45,37 @@ public sealed class FinderService : IDisposable
         {
             _enumerator = _enumerable.GetEnumerator();
             _enumerator.MoveNext();
-
         }
         _index = _enumerator.Current;
     }
 
-    private static void CheckSamePerson(in int i)
+    private static unsafe void CheckSamePerson(in int i)
     {
         foreach (var dict in ServiceManager.NaviMapManager.PersonDict)
         {
-            if (!ServiceManager.NaviMapManager.SourceDataDict[dict.Key].Enabled)
+            if (!ServiceManager.NaviMapManager.SourceDataDict[dict.Key].Enabled) continue;
+            if (!dict.Value.TryGetValue(i, out var person)) continue;
+
+            var obj = ServiceManager.ObjectTable[i];
+            if (obj is null)
             {
-                continue;
-            }
-            dict.Value.TryGetValue(i, out var person);
-            if (person == null)
-            {
+                ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
                 continue;
             }
 
-            if (ServiceManager.ObjectTable[i] == null)
+            if (obj.ObjectKind is not ObjectKind.Player)
             {
+                ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
                 continue;
             }
-            var ptr = person.Ptr;
-            unsafe
-            {
-                try
-                {
-                    var charPointer = (Character*)ptr;
-                    if ((byte)charPointer->GameObject.ObjectKind != (byte)ObjectKind.Player)
-                    {
-                        ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
-                        continue;
-                    }
-                }
-                catch(Exception)
-                {
-                    ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
-                    continue;
-                }
 
-            }
             if (ServiceManager.ObjectTable[i]?.Name.ToString() != person.Name)
             {
                 ServiceManager.NaviMapManager.RemoveFromBag(person.Id, dict.Key);
             }
         }
     }
+
     private static void CheckNewPeople(in int i)
     {
         if (MarkerUtility.ChecksPassed)
@@ -107,121 +89,56 @@ public sealed class FinderService : IDisposable
         ServiceManager.Configuration.SourceConfigs.TryGetValue(FriendKey, out var friendConfig);
         ServiceManager.Configuration.SourceConfigs.TryGetValue(FcMembersKey, out var fcConfig);
         ServiceManager.Configuration.SourceConfigs.TryGetValue(EveryoneKey, out var everyoneConfig);
-        if (fcConfig == null || friendConfig == null || everyoneConfig == null)
-        {
-            return;
-        }
-        if (!fcConfig.Enabled && !friendConfig.Enabled && !everyoneConfig.Enabled)
-        {
-            return;
-        }
 
-        Span<byte> fc = null;
-        try
-        {
-            if (ServiceManager.ObjectTable[0] is null)
-            {
-                return;
-            }
-            var player = (Character*)ServiceManager.ObjectTable[0]?.Address;
-            if (player == null)
-            {
-                return;
-            }
+        var friendsEnabled = friendConfig?.Enabled is true;
+        var fcEnabled = fcConfig?.Enabled is true;
+        var everyoneEnabled = everyoneConfig?.Enabled is true;
+        if (!friendsEnabled && !fcEnabled && !everyoneEnabled) return;
 
-            ServiceManager.NaviMapManager.InCombat = player->InCombat;
-            if (ServiceManager.NaviMapManager.InCombat)
-            {
-                return;
-            }
-            if (!player->FreeCompanyTagString.IsNullOrEmpty())
-            {
-                fc = player->FreeCompanyTag;
-            }
-        }
-        catch
-        {
-            // ignored
-        }
+        var player = ServiceManager.ObjectTable.LocalPlayer;
+        if (player is null) return;
+        var playerPtr = (Character*)player.Address;
 
-        var alreadyInFriendBag = false;
-        var alreadyInFcBag = false;
+        var combat = playerPtr->InCombat;
+        ServiceManager.NaviMapManager.InCombat = combat;
+        if (combat) return;
+        
+        var fc = playerPtr->FreeCompanyTag;
+        if (fc.IsEmpty) fcEnabled = false;
+
         var obj = ServiceManager.ObjectTable[i];
+        if (obj is null) return;
 
-        if (obj == null) { return; }
+        var ptr = (Character*)obj.Address;
+        if (obj.ObjectKind is not ObjectKind.Player) return;
+        if (ptr->IsAllianceMember || ptr->IsPartyMember) return;
 
-        ServiceManager.NaviMapManager.PersonDict.TryGetValue(FriendKey, out var friendDict);
-        ServiceManager.NaviMapManager.PersonDict.TryGetValue(FcMembersKey, out var fcDict);
+        var personDict = ServiceManager.NaviMapManager.PersonDict;
+        var alreadyInFriendBag = friendsEnabled && personDict.TryGetValue(FriendKey, out var friendDict) && friendDict.Any(x => x.Value.Id == obj.GameObjectId);
+        var alreadyInFcBag = fcEnabled && personDict.TryGetValue(FcMembersKey, out var fcDict) && fcDict.Any(x => x.Value.Id == obj.GameObjectId);
+        if (alreadyInFcBag && alreadyInFriendBag) return;
 
-        if (friendDict == null || fcDict == null)
+        if (friendsEnabled && !alreadyInFriendBag && ptr->IsFriend)
         {
-            return;
-        }
-
-        if (friendDict.Any(x => x.Value.Id == obj.GameObjectId) && friendConfig.Enabled)
-        {
+            var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FriendKey, i);
             alreadyInFriendBag = true;
-        }
-
-        if (fcDict.Any(x => x.Value.Id == obj.GameObjectId) && fcConfig.Enabled)
-        {
-            alreadyInFcBag = true;
-        }
-
-        if (alreadyInFcBag && alreadyInFriendBag)
-        {
-            return;
-        }
-
-        var ptr = obj.Address;
-        var charPointer = (Character*)ptr;
-        if ((byte)charPointer->GameObject.ObjectKind != (byte)ObjectKind.Player)
-        {
-            return;
-        }
-        if ((byte)charPointer->GameObject.ObjectKind == (byte)ObjectKind.BattleNpc)
-        {
-            return;
-        }
-
-        if (charPointer->IsAllianceMember && charPointer->IsPartyMember)
-        {
-            return;
-        }
-
-        if (friendConfig.Enabled && !alreadyInFriendBag)
-        {
-            if (charPointer->IsFriend)
-            {
-                var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FriendKey, obj.Address);
-                alreadyInFriendBag = true;
-                ServiceManager.NaviMapManager.AddToBag(personDetails);
-
-            }
-        }
-
-        if (fcConfig.Enabled && !alreadyInFcBag)
-        {
-            if (fc != null)
-            {
-                var tempFc = charPointer->FreeCompanyTag;
-                var playerFc = fc;
-                if (playerFc.SequenceEqual(tempFc))
-                {
-
-                    var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FcMembersKey, obj.Address);
-                    alreadyInFcBag = true;
-                    ServiceManager.NaviMapManager.AddToBag(personDetails);
-                }
-            }
-        }
-
-        if (!alreadyInFcBag && !alreadyInFriendBag && everyoneConfig.Enabled)
-        {
-            var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, EveryoneKey, obj.Address);
-
+            ServiceManager.Log.Info("Adding {name} as friend", personDetails.Name);
             ServiceManager.NaviMapManager.AddToBag(personDetails);
+        }
 
+        if (fcEnabled && !alreadyInFcBag && fc.SequenceEqual(ptr->FreeCompanyTag))
+        {
+            var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FcMembersKey, i);
+            alreadyInFcBag = true;
+            ServiceManager.Log.Info("Adding {name} as fc", personDetails.Name);
+            ServiceManager.NaviMapManager.AddToBag(personDetails);
+        }
+
+        if (everyoneEnabled && !alreadyInFcBag && !alreadyInFriendBag)
+        {
+            var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, EveryoneKey, i);
+            ServiceManager.Log.Info("Adding {name} as everyone", personDetails.Name);
+            ServiceManager.NaviMapManager.AddToBag(personDetails);
         }
     }
 

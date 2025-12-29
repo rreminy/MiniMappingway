@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Character = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
+using FFXIVClientStructs;
 
 namespace MiniMappingway.Utility;
 
@@ -26,21 +27,14 @@ internal static class MarkerUtility
 
     private static unsafe CircleData? CalculateCirclePosition(this KeyValuePair<int, PersonDetails> person)
     {
-        var personObj = ServiceManager.ObjectTable.CreateObjectReference(person.Value.Ptr);
-
-        if (personObj == null || !personObj.IsValid() || ServiceManager.ObjectTable[person.Key] == null
-            || (byte)((Character*)person.Value.Ptr)->GameObject.ObjectKind != (byte)ObjectKind.Player)
+        var personObj = ServiceManager.ObjectTable[person.Value.Index];
+        if (personObj?.IsValid() is not true || personObj.ObjectKind is not ObjectKind.Player)
         {
             ServiceManager.NaviMapManager.RemoveFromBag(person.Value.Id, person.Value.SourceName);
             return null;
         }
-
-        var isPartyMember = ((Character*)personObj.Address)->IsAllianceMember || ((Character*)personObj.Address)->IsPartyMember;
-
-        if (isPartyMember)
-        {
-            return null;
-        }
+        var personPtr = (Character*)personObj.Address;
+        if (personPtr->IsAllianceMember || personPtr->IsPartyMember) return null;
 
         //Calculate the relative position in world coords
         var relativePersonPos = new Vector2(0, 0)
@@ -154,16 +148,9 @@ internal static class MarkerUtility
         ServiceManager.WindowManager.NaviMapWindow.Size = MapSize;
         ServiceManager.WindowManager.NaviMapWindow.Position = MapPos;
 
-        unsafe
-        {
-            var player = (Character*)ServiceManager.ObjectTable[0]?.Address;
-            if (player == null)
-            {
-                return false;
-            }
-
-            PlayerPos = new Vector2(player->GameObject.Position.X, player->GameObject.Position.Z);
-        }
+        var player = ServiceManager.ObjectTable.LocalPlayer;
+        if (player is null) return false;
+        PlayerPos = new Vector2(player.Position.X, player.Position.Z);
         ChecksPassed = true;
         return true;
     }
@@ -172,12 +159,11 @@ internal static class MarkerUtility
     {
         foreach (var x in Enumerable.Range(2, 200).Where(x => x % 2 == 0))
         {
-            if (ServiceManager.ObjectTable[x] != null && ServiceManager.ObjectTable[x]?.GameObjectId == objId)
+            if (ServiceManager.ObjectTable[x]?.GameObjectId == objId)
             {
                 return x;
             }
         }
-
         return null;
     }
 }

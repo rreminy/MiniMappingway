@@ -66,7 +66,7 @@ public unsafe class NaviMapManager : IDisposable
         if (ServiceManager.Configuration.SourceConfigs.TryGetValue(sourceName, out var source))
         {
             SourceDataDict.AddOrUpdate(sourceName, source, (_, _) => source);
-            PersonDict.AddOrUpdate(sourceName, new ConcurrentDictionary<int, PersonDetails>(),
+            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
                 (_, _) => new ConcurrentDictionary<int, PersonDetails>());
         }
         else
@@ -74,7 +74,7 @@ public unsafe class NaviMapManager : IDisposable
             var sourceData = new SourceData(colour);
 
             SourceDataDict.AddOrUpdate(sourceName, sourceData, (_, _) => sourceData);
-            PersonDict.AddOrUpdate(sourceName, new ConcurrentDictionary<int, PersonDetails>(),
+            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
                 (_, _) => new ConcurrentDictionary<int, PersonDetails>());
 
         }
@@ -87,7 +87,7 @@ public unsafe class NaviMapManager : IDisposable
         if (ServiceManager.Configuration.SourceConfigs.TryGetValue(sourceName, out var source))
         {
             SourceDataDict.AddOrUpdate(sourceName, source, (_, _) => source);
-            PersonDict.AddOrUpdate(sourceName, new ConcurrentDictionary<int, PersonDetails>(),
+            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
                 (_, _) => new ConcurrentDictionary<int, PersonDetails>());
 
         }
@@ -114,7 +114,7 @@ public unsafe class NaviMapManager : IDisposable
 
             ServiceManager.Configuration.SourceConfigs.TryAdd(sourceName, sourceData);
             SourceDataDict.AddOrUpdate(sourceName, sourceData, (_, _) => sourceData);
-            PersonDict.AddOrUpdate(sourceName, new ConcurrentDictionary<int, PersonDetails>(),
+            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
                 (_, _) => new ConcurrentDictionary<int, PersonDetails>());
         }
         return true;

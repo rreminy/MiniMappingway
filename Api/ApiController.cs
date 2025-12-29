@@ -1,6 +1,7 @@
 ﻿using Dalamud.Plugin.Ipc;
 using MiniMappingway.Manager;
 using MiniMappingway.Model;
+using MiniMappingway.Utility;
 using System;
 using System.Numerics;
 
@@ -109,12 +110,9 @@ public class ApiController : IDisposable
     /// <returns>Success boolean</returns>
     private bool AddPerson(string sourceName, string name, uint id)
     {
-        var person = ServiceManager.ObjectTable.SearchById(id);
-        if (person == null)
-        {
-            return false;
-        }
-        return ServiceManager.NaviMapManager.AddToBag(new PersonDetails(name, id, sourceName, person.Address));
+        var index = ServiceManager.ObjectTable.FindIndexById(id);
+        if (index is -1) return false;
+        return ServiceManager.NaviMapManager.AddToBag(new PersonDetails(name, id, sourceName, index));
     }
 
     /// <summary>
