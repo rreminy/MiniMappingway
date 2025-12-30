@@ -104,7 +104,7 @@ public sealed class FinderService : IDisposable
         if (combat) return;
         
         var fc = playerPtr->FreeCompanyTag;
-        if (fc.IsEmpty) fcEnabled = false;
+        if (fc.IsEmpty || fc[0] is 0) fcEnabled = false;
 
         var obj = ServiceManager.ObjectTable[i];
         if (obj is null) return;
