@@ -122,7 +122,6 @@ public sealed class FinderService : IDisposable
         {
             var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FriendKey, i);
             alreadyInFriendBag = true;
-            ServiceManager.Log.Info("Adding {name} as friend", personDetails.Name);
             ServiceManager.NaviMapManager.AddToBag(personDetails);
         }
 
@@ -130,14 +129,12 @@ public sealed class FinderService : IDisposable
         {
             var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, FcMembersKey, i);
             alreadyInFcBag = true;
-            ServiceManager.Log.Info("Adding {name} as fc", personDetails.Name);
             ServiceManager.NaviMapManager.AddToBag(personDetails);
         }
 
         if (everyoneEnabled && !alreadyInFcBag && !alreadyInFriendBag)
         {
             var personDetails = new PersonDetails(obj.Name.ToString(), obj.GameObjectId, EveryoneKey, i);
-            ServiceManager.Log.Info("Adding {name} as everyone", personDetails.Name);
             ServiceManager.NaviMapManager.AddToBag(personDetails);
         }
     }
