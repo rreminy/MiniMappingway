@@ -1,4 +1,4 @@
-﻿using Dalamud.Configuration;
+using Dalamud.Configuration;
 using MiniMappingway.Manager;
 using MiniMappingway.Model;
 using System;
@@ -14,6 +14,8 @@ public class Configuration : IPluginConfiguration
     public Dictionary<string, SourceData> SourceConfigs { get; set; } = [];
 
     public bool Enabled { get; set; } = true;
+
+    public bool MultiMonitorFix { get; set; } = false;
 
     public void Initialize()
     {

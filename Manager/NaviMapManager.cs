@@ -14,7 +14,7 @@ using System.Numerics;
 
 namespace MiniMappingway.Manager;
 
-public unsafe class NaviMapManager : IDisposable
+public unsafe sealed class NaviMapManager : IDisposable
 {
 
     public readonly ConcurrentDictionary<string, ConcurrentDictionary<int, PersonDetails>> PersonDict = new();
@@ -55,30 +55,15 @@ public unsafe class NaviMapManager : IDisposable
     public NaviMapManager()
     {
         ServiceManager.GameInteropProvider.InitializeFromAttributes(this);
-
-        _maps = ServiceManager.DataManager.GetExcelSheet<Map>();
-        UpdateNaviMap();
-        UpdateMap();
+        this._maps = ServiceManager.DataManager.GetExcelSheet<Map>();
+        this.UpdateNaviMap();
+        this.UpdateMap();
     }
 
     public bool AddOrUpdateSource(string sourceName, uint colour)
     {
-        if (ServiceManager.Configuration.SourceConfigs.TryGetValue(sourceName, out var source))
-        {
-            SourceDataDict.AddOrUpdate(sourceName, source, (_, _) => source);
-            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
-                (_, _) => new ConcurrentDictionary<int, PersonDetails>());
-        }
-        else
-        {
-            var sourceData = new SourceData(colour);
-
-            SourceDataDict.AddOrUpdate(sourceName, sourceData, (_, _) => sourceData);
-            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
-                (_, _) => new ConcurrentDictionary<int, PersonDetails>());
-
-        }
-
+        this.SourceDataDict[sourceName] = ServiceManager.Configuration.SourceConfigs.GetValueOrDefault(sourceName) ?? new SourceData(colour);
+        this.PersonDict.GetOrAdd(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>()).Clear();
         return true;
     }
 
@@ -86,10 +71,8 @@ public unsafe class NaviMapManager : IDisposable
     {
         if (ServiceManager.Configuration.SourceConfigs.TryGetValue(sourceName, out var source))
         {
-            SourceDataDict.AddOrUpdate(sourceName, source, (_, _) => source);
-            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
-                (_, _) => new ConcurrentDictionary<int, PersonDetails>());
-
+            SourceDataDict[sourceName] = source;
+            PersonDict.GetOrAdd(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>()).Clear();
         }
         else
         {
@@ -113,49 +96,43 @@ public unsafe class NaviMapManager : IDisposable
             }
 
             ServiceManager.Configuration.SourceConfigs.TryAdd(sourceName, sourceData);
-            SourceDataDict.AddOrUpdate(sourceName, sourceData, (_, _) => sourceData);
-            PersonDict.AddOrUpdate(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>(),
-                (_, _) => new ConcurrentDictionary<int, PersonDetails>());
+            SourceDataDict[sourceName] = sourceData;
+            PersonDict.GetOrAdd(sourceName, _ => new ConcurrentDictionary<int, PersonDetails>()).Clear();
         }
         return true;
     }
 
     public bool UpdateNaviMap()
     {
-
-        if (NaviMapPointer == null)
-        {
-            return false;
-        }
-
-        //There's probably a better way of doing this but I don't know it for now
-        IsLocked = ((AtkComponentCheckBox*)NaviMapPointer->GetNodeById(4)->GetComponent())->IsChecked;
-
-        if (NaviMapPointer->UldManager.LoadedState != AtkLoadState.Loaded)
-        {
-            return false;
-        }
+        if (this.NaviMapPointer is null || this.NaviMapPointer->UldManager.LoadedState is not AtkLoadState.Loaded) return false;
         try
         {
-            Rotation = NaviMapPointer->GetNodeById(8)->Rotation;
-            Zoom = NaviMapPointer->GetNodeById(18)->GetComponent()->GetImageNodeById(6)->ScaleX;
+            //There's probably a better way of doing this but I don't know it for now
+            this.IsLocked = ((AtkComponentCheckBox*)NaviMapPointer->GetNodeById(4)->GetComponent())->IsChecked;
+
+            this.Rotation = NaviMapPointer->GetNodeById(8)->Rotation;
+            this.Zoom = NaviMapPointer->GetNodeById(18)->GetComponent()->GetImageNodeById(6)->ScaleX;
         }
         catch
         {
             // ignored
         }
 
-        X = NaviMapPointer->X;
-        Y = NaviMapPointer->Y;
-        NaviScale = NaviMapPointer->Scale;
-        Visible = NaviMapPointer->IsVisible && NaviMapPointer->VisibilityFlags == 0 && !ServiceManager.GameGui.GameUiHidden;
+        this.X = NaviMapPointer->X;
+        this.Y = NaviMapPointer->Y;
+        this.NaviScale = NaviMapPointer->Scale;
+        this.Visible = NaviMapPointer->IsVisible && NaviMapPointer->VisibilityFlags == 0 && !ServiceManager.GameGui.GameUiHidden;
 
-        // Multi-monitor support
-        var viewport = ImGui.GetWindowViewport();
-        if (!viewport.IsNull)
+        // Multi-monitor viewport offset fix - may or may not work
+        // https://github.com/GemPlugins/MiniMappingway/issues/2
+        if (ServiceManager.Configuration.MultiMonitorFix)
         {
-            X -= (int)viewport.Pos.X;
-            Y -= (int)viewport.Pos.Y;
+            var viewport = ImGui.GetWindowViewport();
+            if (!viewport.IsNull)
+            {
+                this.X -= (int)viewport.Pos.X;
+                this.Y -= (int)viewport.Pos.Y;
+            }
         }
 
         return true;
@@ -165,35 +142,26 @@ public unsafe class NaviMapManager : IDisposable
     {
         var locationTitle = (AtkUnitBase*)ServiceManager.GameGui.GetAddonByName("_LocationTitle").Address;
         var fadeMiddle = (AtkUnitBase*)ServiceManager.GameGui.GetAddonByName("FadeMiddle").Address;
-        return Loading =
+        return this.Loading =
             locationTitle->IsVisible ||
             fadeMiddle->IsVisible;
     }
 
     public void UpdateMap()
     {
-        if (_maps != null)
-        {
-            try
-            {
-                var map = _maps.GetRow(GetMapId());
+        var maps = this._maps;
+        if (maps is null || !maps.TryGetRow(this.GetMapId(), out var map)) return;
 
-                if (map.SizeFactor != 0)
-                {
-                    ZoneScale = (float)map.SizeFactor / 100;
-                }
-                else
-                {
-                    ZoneScale = 1;
-                }
-                OffsetX = map.OffsetX;
-                OffsetY = map.OffsetY;
-            }
-            catch (ArgumentOutOfRangeException e)
-            {
-                return;
-            }
+        if (map.SizeFactor is not 0)
+        {
+            this.ZoneScale = (float)map.SizeFactor / 100;
         }
+        else
+        {
+            this.ZoneScale = 1;
+        }
+        this.OffsetX = map.OffsetX;
+        this.OffsetY = map.OffsetY;
     }
 
     private uint GetMapId()
@@ -203,67 +171,37 @@ public unsafe class NaviMapManager : IDisposable
 
     public bool ClearPersonBag(string sourceName)
     {
-        PersonDict.TryGetValue(sourceName, out var dict);
-        if (dict == null)
-        {
-            return false;
-        }
+        if (!this.PersonDict.TryGetValue(sourceName, out var dict)) return false;
         dict.Clear();
         return true;
     }
     public bool OverwriteWholeBag(string sourceName, List<PersonDetails> list)
     {
-        ClearPersonBag(sourceName);
-
         var success = true;
 
-        PersonDict.TryGetValue(sourceName, out var dict);
-
-        if (dict == null)
-        {
-            return false;
-        }
+        if (!this.PersonDict.TryGetValue(sourceName, out var dict)) return false;
+        dict.Clear();
 
         foreach (var person in list)
         {
             var personIndex = MarkerUtility.GetObjIndexById(person.Id);
-
-            if (personIndex == null)
-            {
-                continue;
-            }
-            if (!dict.TryAdd((int)personIndex, person))
-            {
-                success = false;
-            }
+            if (personIndex is null) continue;
+            if (!dict.TryAdd((int)personIndex, person)) success = false;
         }
         return success;
     }
 
     public bool AddToBag(PersonDetails details)
     {
-        PersonDict.TryGetValue(details.SourceName, out var dict);
-
-        if (dict == null)
-        {
-            return false;
-        }
-
+        if (!this.PersonDict.TryGetValue(details.SourceName, out var dict)) return false;
         var personIndex = MarkerUtility.GetObjIndexById(details.Id);
-        if (personIndex == null)
-        {
-            return false;
-        }
+        if (personIndex is null) return false;
         return dict.TryAdd((int)personIndex, details);
     }
 
     public bool RemoveFromBag(ulong id, string sourceName)
     {
-        PersonDict.TryGetValue(sourceName, out var dict);
-        if (dict == null)
-        {
-            return false;
-        }
+        if (!this.PersonDict.TryGetValue(sourceName, out var dict)) return false;
         var entry = dict.First(x => x.Value.Id == id);
         return dict.TryRemove(entry);
 
@@ -271,28 +209,22 @@ public unsafe class NaviMapManager : IDisposable
 
     public bool RemoveFromBag(string name, string sourceName)
     {
-        PersonDict.TryGetValue(sourceName, out var dict);
-        if (dict == null)
-        {
-            return false;
-        }
+        if (!this.PersonDict.TryGetValue(sourceName, out var dict)) return false;
         var entry = dict.First(x => x.Value.Name == name);
         return dict.TryRemove(entry);
-
     }
 
     public bool RemoveSourceAndPeople(string sourceName)
     {
         var successPerson = ClearPersonBag(sourceName);
         var successSource = SourceDataDict.TryRemove(sourceName, out _);
-
         return successPerson && successSource;
     }
 
     public void Dispose()
     {
-        PersonDict.Clear();
-        SourceDataDict.Clear();
+        this.PersonDict.Clear();
+        this.SourceDataDict.Clear();
     }
 
     public int GetNextFreePriority()
@@ -304,7 +236,6 @@ public unsafe class NaviMapManager : IDisposable
                 return i;
             }
         }
-
         return 1;
     }
 }

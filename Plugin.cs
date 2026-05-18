@@ -1,4 +1,4 @@
-﻿using Dalamud.Game.Command;
+using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin;
@@ -75,9 +75,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         ServiceManager.NaviMapManager.UpdateMap();
 
-        foreach (var dict in ServiceManager.NaviMapManager.PersonDict)
+        foreach (var dict in ServiceManager.NaviMapManager.PersonDict.Values)
         {
-            ServiceManager.NaviMapManager.ClearPersonBag(dict.Key);
+            dict.Clear();
         }
     }
 

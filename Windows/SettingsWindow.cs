@@ -1,4 +1,4 @@
-﻿using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using MiniMappingway.Manager;
@@ -6,6 +6,8 @@ using MiniMappingway.Model;
 using MiniMappingway.Service;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Interface.Utility.Raii;
+using System;
 
 namespace MiniMappingway.Windows;
 
@@ -42,10 +44,10 @@ public class SettingsWindow : Window
 
         foreach (var source in ServiceManager.NaviMapManager.SourceDataDict.OrderBy(x => x.Value.Priority))
         {
-            ImGui.PushID(source.Key);
-            var sourceDataLocal = new SourceData(source.Value);
-            if (ImGui.BeginListBox($"##list{source.Key}", new Vector2(-1, 210 * ImGuiHelpers.GlobalScale)))
+            using (var sourceChild = ImRaii.PushId(source.Key))
             {
+                var sourceDataLocal = new SourceData(source.Value);
+                using var listBox = ImRaii.ListBox($"##list{source.Key}", new Vector2(-1, 210 * ImGuiHelpers.GlobalScale));
                 ImGui.Text(source.Key);
 
                 var enabledLocal = sourceDataLocal.Enabled;
@@ -54,7 +56,7 @@ public class SettingsWindow : Window
                     sourceDataLocal.Enabled = enabledLocal;
                 }
 
-                ImGui.SameLine(90);
+                ImGui.SameLine();
 
                 var tempPriority = sourceDataLocal.Priority;
                 var isPriorityError = false;
@@ -62,39 +64,23 @@ public class SettingsWindow : Window
                 if (source.Key == FinderService.EveryoneKey)
                 {
                     ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "  \"Everyone\" is always the lowest priority");
-
                 }
                 else
                 {
-
-                    ImGui.PushItemWidth(100);
-
-                    if (ImGui.InputInt("##priority", ref tempPriority, 1))
+                    using (var width = ImRaii.ItemWidth(100))
                     {
-                        if (tempPriority < 1)
+                        if (ImGui.InputInt("##priority", ref tempPriority, 1))
                         {
-                            tempPriority = 1;
+                            tempPriority = Math.Clamp(tempPriority, 1, 99);
+                            sourceDataLocal.Priority = tempPriority;
                         }
-
-                        if (tempPriority > 99)
-                        {
-                            tempPriority = 99;
-                        }
-
-                        sourceDataLocal.Priority = tempPriority;
                     }
+
                     isPriorityError = ServiceManager.NaviMapManager.SourceDataDict.Any(x => x.Value.Priority == tempPriority && x.Key != source.Key);
 
-                    ImGui.PopItemWidth();
                     ImGui.SameLine();
-                    if (isPriorityError)
-                    {
-                        ImGui.TextColored(new Vector4(1, 0, 0, 1), $"Priority {tempPriority} is already taken");
-                    }
-                    else
-                    {
-                        ImGui.Text("Priority, higher shows on top of lower");
-                    }
+                    if (isPriorityError) ImGui.TextColored(new Vector4(1, 0, 0, 1), $"Priority {tempPriority} is already taken");
+                    else ImGui.Text("Priority, higher shows on top of lower");
 
                 }
 
@@ -139,15 +125,24 @@ public class SettingsWindow : Window
                     if (!isPriorityError)
                     {
                         ServiceManager.Configuration.SourceConfigs[source.Key] = sourceDataLocal;
-
                     }
                     ServiceManager.Configuration.Save();
                 }
-                ImGui.EndListBox();
-
             }
-            ImGui.PopID();
         }
 
+        using (var advancedSection = ImRaii.TreeNode("Advanced###advanced"))
+        {
+            if (advancedSection.Success)
+            {
+                var multiMonitorFix = ServiceManager.Configuration.MultiMonitorFix;
+                if (ImGui.Checkbox("Multi-monitor fix###multimonitorfix", ref multiMonitorFix))
+                {
+                    ServiceManager.Configuration.MultiMonitorFix = multiMonitorFix;
+                    ServiceManager.Configuration.Save();
+                }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Attempt to fix multi-monitor offset issues on some configurations");
+            }
+        }
     }
 }
